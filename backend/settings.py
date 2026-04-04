@@ -12,16 +12,19 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-sy2*68-ndufvt7wt_ax!-8zk-1ijy-n_h1=+=xa-mr3ca11ot3'
+# ── SECURITY ──────────────────────────────────────────────────
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-this-in-production')
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+# Allow all Railway and Netlify subdomains
+ALLOWED_HOSTS += ['.up.railway.app', '.netlify.app']
 
-DEBUG = True
 
-ALLOWED_HOSTS = []
-
-
+# ── APPS ──────────────────────────────────────────────────────
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -36,8 +39,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # must be first
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -66,19 +70,15 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend.wsgi.application'
 
 
-# ── DATABASE (MySQL) ──────────────────────────────────────────
+# ── DATABASE ──────────────────────────────────────────────────
+# Railway provides DATABASE_URL automatically
+import dj_database_url
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'taskflow',
-        'USER': 'root',
-        'PASSWORD': '12345',
-        'HOST': 'localhost',
-        'PORT': '3306',
-        'OPTIONS': {
-            'charset': 'utf8mb4',
-        },
-    }
+    'default': dj_database_url.config(
+        default=f"mysql://root:{os.environ.get('MYSQL_PASSWORD','')}@localhost:3306/taskflow",
+        conn_max_age=600,
+    )
 }
 
 
@@ -96,11 +96,12 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
-CORS_ALLOW_ALL_ORIGINS = True  # dev only
-STATIC_URL = 'static/'
 
+# ── STATIC & MEDIA ────────────────────────────────────────────
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# ── MEDIA FILES (avatar uploads) ──────────────────────────────
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -126,8 +127,10 @@ SIMPLE_JWT = {
 
 
 # ── CORS ──────────────────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://127.0.0.1:3000',
-]
+# In production set this to your Netlify URL e.g. https://taskflow.netlify.app
+CORS_ALLOWED_ORIGINS = os.environ.get(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:3000,http://127.0.0.1:5500'
+).split(',')
+
+CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
