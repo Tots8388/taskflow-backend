@@ -1,0 +1,10 @@
+django
+djangorestframework 
+djangorestframework-simplejwt 
+django-cors-headers 
+django-filter 
+mysqlclient 
+Pillow 
+whitenoise 
+dj-database-url 
+gunicorn 
