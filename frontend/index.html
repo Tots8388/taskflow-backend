@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taskflow</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div>
+      <div class="auth-logo">Task<span>flow</span></div>
+      <div class="auth-tagline">your tasks. your way.</div>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" onclick="switchAuthTab('signup')">Sign Up</button>
+    </div>
+    <div class="auth-fields">
+      <div class="field-group">
+        <div class="field-label">Username</div>
+        <input class="auth-input" id="auth-username" type="text" placeholder="your_username">
+      </div>
+      <div class="field-group" id="email-field" style="display:none">
+        <div class="field-label">Email</div>
+        <input class="auth-input" id="auth-email" type="email" placeholder="you@example.com">
+      </div>
+      <div class="field-group">
+        <div class="field-label">Password</div>
+        <input class="auth-input" id="auth-password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter') authSubmit()">
+      </div>
+    </div>
+    <div class="auth-error" id="auth-error"></div>
+    <button class="auth-btn" id="auth-btn" onclick="authSubmit()">Sign In</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <div class="logo">Task<span>flow</span></div>
+    <div class="header-nav">
+      <button class="nav-btn active" onclick="showView('tasks', this)">Tasks</button>
+      <button class="nav-btn" onclick="showView('dashboard', this)">Dashboard</button>
+      <button class="nav-btn" onclick="showView('categories', this)">Categories</button>
+      <button class="nav-btn" onclick="showView('profile', this)">Profile</button>
+    </div>
+    <div class="header-right">
+      <div class="sync-dot syncing" id="sync-dot"></div>
+      <div class="user-badge" id="user-badge">—</div>
+      <button class="logout-btn" onclick="logout()">Sign out</button>
+    </div>
+  </header>
+
+  <!-- TASKS VIEW -->
+  <div class="view active" id="view-tasks">
+    <aside>
+      <div class="aside-inner">
+        <div class="sidebar-section">
+          <h3>View</h3>
+          <button class="filter-btn active" onclick="setFilter('all',this)">
+            <span class="filter-dot" style="background:var(--muted)"></span> All Tasks
+            <span class="filter-count" id="cnt-all">0</span>
+          </button>
+          <button class="filter-btn" onclick="setFilter('pending',this)">
+            <span class="filter-dot" style="background:var(--blue)"></span> Pending
+            <span class="filter-count" id="cnt-pending">0</span>
+          </button>
+          <button class="filter-btn" onclick="setFilter('done',this)">
+            <span class="filter-dot" style="background:var(--accent)"></span> Completed
+            <span class="filter-count" id="cnt-done">0</span>
+          </button>
+          <button class="filter-btn" onclick="setFilter('overdue',this)">
+            <span class="filter-dot" style="background:var(--red)"></span> Overdue
+            <span class="filter-count" id="cnt-overdue">0</span>
+          </button>
+        </div>
+        <div class="sidebar-section">
+          <h3>Priority</h3>
+          <button class="filter-btn" onclick="setFilter('high',this)">
+            <span class="filter-dot" style="background:var(--red)"></span> High
+            <span class="filter-count" id="cnt-high">0</span>
+          </button>
+          <button class="filter-btn" onclick="setFilter('medium',this)">
+            <span class="filter-dot" style="background:var(--orange)"></span> Medium
+            <span class="filter-count" id="cnt-medium">0</span>
+          </button>
+          <button class="filter-btn" onclick="setFilter('low',this)">
+            <span class="filter-dot" style="background:var(--green)"></span> Low
+            <span class="filter-count" id="cnt-low">0</span>
+          </button>
+        </div>
+        <div class="sidebar-section">
+          <h3>Categories</h3>
+          <div id="cat-filters"></div>
+          <button class="cat-add-btn" onclick="openCatModal()">+ New Category</button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <div class="add-bar">
+        <div class="add-form">
+          <input type="text" class="form-input" id="task-input" placeholder="Add a new task..." onkeydown="if(event.key==='Enter') addTask()">
+          <select class="form-input" id="priority-select">
+            <option value="medium">⚡ Medium</option>
+            <option value="high">🔴 High</option>
+            <option value="low">🟢 Low</option>
+          </select>
+          <select class="form-input" id="cat-select" style="width:130px">
+            <option value="">No category</option>
+          </select>
+          <input type="date" class="form-input" id="due-input">
+          <button class="add-btn" id="add-btn" onclick="addTask()">+ Add</button>
+        </div>
+      </div>
+      <div class="list-header">
+        <div class="view-title" id="view-title">All Tasks</div>
+        <div class="pagination-info" id="pagination-info"></div>
+        <div class="sort-control">
+          Sort: <select id="sort-select" onchange="fetchTasks()">
+            <option value="-created_at">Newest</option>
+            <option value="due">Due Date</option>
+            <option value="priority">Priority</option>
+          </select>
+        </div>
+      </div>
+      <div class="task-list" id="task-list">
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+      </div>
+      <div class="pagination-bar" id="pagination-bar"></div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div class="view" id="view-dashboard">
+    <div class="dash-title">Dashboard</div>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Tasks</div>
+        <div class="stat-value" id="d-total">0</div>
+        <div class="stat-sub">all time</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Completed</div>
+        <div class="stat-value" style="color:var(--accent)" id="d-done">0</div>
+        <div class="stat-sub" id="d-pct">0% rate</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pending</div>
+        <div class="stat-value" style="color:var(--blue)" id="d-pending">0</div>
+        <div class="stat-sub">to do</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Overdue</div>
+        <div class="stat-value" style="color:var(--red)" id="d-overdue">0</div>
+        <div class="stat-sub">need attention</div>
+      </div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-title">Tasks by Priority</div>
+        <div class="chart-wrap"><canvas id="chart-priority"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Tasks by Category</div>
+        <div class="chart-wrap"><canvas id="chart-category"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CATEGORIES VIEW -->
+  <div class="view" id="view-categories">
+    <div class="cat-header">
+      <div class="dash-title">Categories</div>
+      <button class="pri-btn" onclick="openCatModal()">+ New Category</button>
+    </div>
+    <div class="cat-grid" id="cat-grid"></div>
+  </div>
+
+  <!-- PROFILE VIEW -->
+  <div class="view" id="view-profile">
+    <div class="dash-title">Profile</div>
+    <div class="profile-layout">
+      <div class="profile-card">
+        <div class="avatar-wrap">
+          <img id="profile-avatar" src="" alt="avatar" onerror="this.style.display='none'">
+          <div class="avatar-placeholder" id="avatar-placeholder">?</div>
+          <label class="avatar-upload-btn" for="avatar-input">Change</label>
+          <input type="file" id="avatar-input" accept="image/*" onchange="uploadAvatar(this)" style="display:none">
+        </div>
+        <div class="profile-info">
+          <div class="profile-username" id="profile-username">—</div>
+          <div class="profile-email" id="profile-email">—</div>
+        </div>
+      </div>
+      <div class="profile-section-card">
+        <div class="profile-section-title">Bio</div>
+        <textarea class="profile-textarea" id="profile-bio" placeholder="Tell us about yourself..."></textarea>
+        <button class="pri-btn" onclick="saveBio()">Save Bio</button>
+      </div>
+      <div class="profile-section-card">
+        <div class="profile-section-title">Change Password</div>
+        <div class="field-group">
+          <div class="field-label">Current Password</div>
+          <input class="auth-input" id="old-password" type="password" placeholder="••••••••">
+        </div>
+        <div class="field-group">
+          <div class="field-label">New Password</div>
+          <input class="auth-input" id="new-password" type="password" placeholder="••••••••">
+        </div>
+        <div class="auth-error" id="pw-error"></div>
+        <button class="pri-btn" onclick="changePassword()">Update Password</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT TASK MODAL -->
+<div class="modal-overlay hidden" id="edit-modal">
+  <div class="modal">
+    <div class="modal-title">Edit Task</div>
+    <div class="modal-fields">
+      <div class="field-group">
+        <label>Task Name</label>
+        <input class="modal-input" id="edit-name" type="text">
+      </div>
+      <div class="modal-row">
+        <div class="field-group">
+          <label>Priority</label>
+          <select class="modal-input" id="edit-priority">
+            <option value="medium">⚡ Medium</option>
+            <option value="high">🔴 High</option>
+            <option value="low">🟢 Low</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Category</label>
+          <select class="modal-input" id="edit-category">
+            <option value="">No category</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Due Date</label>
+        <input class="modal-input" type="date" id="edit-due">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeEditModal()">Cancel</button>
+      <button class="modal-save" id="edit-save-btn" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- CATEGORY MODAL -->
+<div class="modal-overlay hidden" id="cat-modal">
+  <div class="modal" style="width:360px">
+    <div class="modal-title" id="cat-modal-title">New Category</div>
+    <div class="modal-fields">
+      <div class="field-group">
+        <label>Name</label>
+        <input class="modal-input" id="cat-name" type="text" placeholder="e.g. Health" onkeydown="if(event.key==='Enter') saveCat()">
+      </div>
+      <div class="field-group">
+        <label>Color</label>
+        <input class="modal-input" id="cat-color" type="color" value="#8b6fd4">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeCatModal()">Cancel</button>
+      <button class="modal-save" id="cat-save-btn" onclick="saveCat()">Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
