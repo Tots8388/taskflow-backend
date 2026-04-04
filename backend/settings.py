@@ -20,7 +20,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-this-in-production')
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
-# Allow all Railway and Netlify subdomains
 ALLOWED_HOSTS += ['.up.railway.app', '.netlify.app']
 
 
@@ -70,15 +69,19 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend.wsgi.application'
 
 
-# ── DATABASE ──────────────────────────────────────────────────
-# Railway provides DATABASE_URL automatically
-import dj_database_url
-
+# ── DATABASE (Railway MySQL variables) ────────────────────────
 DATABASES = {
-    'default': dj_database_url.config(
-        default=f"mysql://root:{os.environ.get('MYSQL_PASSWORD','')}@localhost:3306/taskflow",
-        conn_max_age=600,
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.environ.get('MYSQLDATABASE', 'taskflow'),
+        'USER': os.environ.get('MYSQLUSER', 'root'),
+        'PASSWORD': os.environ.get('MYSQLPASSWORD', ''),
+        'HOST': os.environ.get('MYSQLHOST', 'localhost'),
+        'PORT': os.environ.get('MYSQLPORT', '3306'),
+        'OPTIONS': {
+            'charset': 'utf8mb4',
+        },
+    }
 }
 
 
@@ -127,7 +130,6 @@ SIMPLE_JWT = {
 
 
 # ── CORS ──────────────────────────────────────────────────────
-# In production set this to your Netlify URL e.g. https://taskflow.netlify.app
 CORS_ALLOWED_ORIGINS = os.environ.get(
     'CORS_ALLOWED_ORIGINS',
     'http://localhost:3000,http://127.0.0.1:5500'
