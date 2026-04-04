@@ -19,4 +19,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD python manage.py migrate && gunicorn backend.wsgi --bind 0.0.0.0:$PORT --log-file -
+RUN mkdir -p /app/staticfiles
+
+# Use a startup script to run migrate then gunicorn
+COPY start.sh .
+RUN chmod +x start.sh
+
+CMD ["./start.sh"]
