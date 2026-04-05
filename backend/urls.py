@@ -16,17 +16,27 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-
-urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/', include('api.urls')),
-]
+from django.http import JsonResponse
+from django.views.generic import TemplateView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/', include('api.urls')),
 
-    path('api/token/', TokenObtainPairView.as_view()),
-    path('api/token/refresh/', TokenRefreshView.as_view()),
+def health_check(request):
+    return JsonResponse({'status': 'ok'})
+
+
+urlpatterns = [
+    # Health check for Railway / load balancers
+    path('health/', health_check, name='health-check'),
+
+    # Admin
+    path('admin/', admin.site.urls),
+
+    # API
+    path('api/', include('api.urls')),
+    path('api/token/', TokenObtainPairView.as_view(), name='token-obtain'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
+
+    # Serve frontend — catch-all must be last
+    path('', TemplateView.as_view(template_name='index.html'), name='frontend'),
 ]

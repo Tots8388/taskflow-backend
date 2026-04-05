@@ -1,11 +1,18 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Taskflow</title>
+<meta name="description" content="Taskflow — a minimal task manager. Organize tasks, set priorities, track progress.">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
+<link rel="manifest" href="{% static 'manifest.json' %}">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
 <body>
 
@@ -23,15 +30,15 @@
     <div class="auth-fields">
       <div class="field-group">
         <div class="field-label">Username</div>
-        <input class="auth-input" id="auth-username" type="text" placeholder="your_username">
+        <input class="auth-input" id="auth-username" type="text" placeholder="your_username" autocomplete="username">
       </div>
       <div class="field-group" id="email-field" style="display:none">
         <div class="field-label">Email</div>
-        <input class="auth-input" id="auth-email" type="email" placeholder="you@example.com">
+        <input class="auth-input" id="auth-email" type="email" placeholder="you@example.com" autocomplete="email">
       </div>
       <div class="field-group">
         <div class="field-label">Password</div>
-        <input class="auth-input" id="auth-password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter') authSubmit()">
+        <input class="auth-input" id="auth-password" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter') authSubmit()">
       </div>
     </div>
     <div class="auth-error" id="auth-error"></div>
@@ -209,11 +216,11 @@
         <div class="profile-section-title">Change Password</div>
         <div class="field-group">
           <div class="field-label">Current Password</div>
-          <input class="auth-input" id="old-password" type="password" placeholder="••••••••">
+          <input class="auth-input" id="old-password" type="password" placeholder="••••••••" autocomplete="current-password">
         </div>
         <div class="field-group">
           <div class="field-label">New Password</div>
-          <input class="auth-input" id="new-password" type="password" placeholder="••••••••">
+          <input class="auth-input" id="new-password" type="password" placeholder="••••••••" autocomplete="new-password">
         </div>
         <div class="auth-error" id="pw-error"></div>
         <button class="pri-btn" onclick="changePassword()">Update Password</button>
@@ -283,6 +290,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-<script src="app.js"></script>
+<script src="{% static 'js/app.js' %}"></script>
 </body>
 </html>

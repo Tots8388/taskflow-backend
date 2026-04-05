@@ -1,0 +1,16 @@
+{
+  "name": "Taskflow",
+  "short_name": "Taskflow",
+  "description": "Your tasks. Your way.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0c",
+  "theme_color": "#0a0a0c",
+  "icons": [
+    {
+      "src": "/static/img/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
