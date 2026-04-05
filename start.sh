@@ -18,3 +18,13 @@ exec gunicorn backend.wsgi \
     --access-logfile - \
     --error-logfile - \
     --log-level info
+echo "==> Creating superuser if needed..."
+python manage.py shell -c "
+from django.contrib.auth import get_user_model
+User = get_user_model()
+if not User.objects.filter(is_superuser=True).exists():
+    User.objects.create_superuser('${DJANGO_SUPERUSER_USERNAME}', '${DJANGO_SUPERUSER_EMAIL}', '${DJANGO_SUPERUSER_PASSWORD}')
+    print('Superuser created')
+else:
+    print('Superuser already exists')
+"
