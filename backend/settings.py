@@ -174,7 +174,7 @@ CORS_ALLOWED_ORIGINS = os.environ.get(
 ).split(',')
 
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
-
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ── LOGGING ───────────────────────────────────────────────────
 LOGGING = {
