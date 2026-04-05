@@ -1,3 +1,4 @@
+import uuid
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models.signals import post_save
@@ -8,13 +9,13 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
     bio = models.TextField(max_length=300, blank=True)
+    email_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f'{self.user.username} profile'
 
 
-# Auto-create a profile whenever a new User is created
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
@@ -23,6 +24,15 @@ def create_user_profile(sender, instance, created, **kwargs):
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):
     instance.profile.save()
+
+
+class EmailVerificationToken(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='verification_token')
+    token = models.UUIDField(default=uuid.uuid4, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Verification token for {self.user.username}'
 
 
 class Category(models.Model):
@@ -45,6 +55,7 @@ class Task(models.Model):
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES)
     due = models.DateField(null=True, blank=True)
     done = models.BooleanField(default=False)
+    archived = models.BooleanField(default=False)
     category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.SET_NULL)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)

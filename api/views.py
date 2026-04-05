@@ -1,12 +1,20 @@
+import uuid
+from django.conf import settings
+from django.core.mail import send_mail
+from django.shortcuts import get_object_or_404
+
 from rest_framework import viewsets, generics, filters, status
+from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 
-from .models import Task, Category
+from .models import Task, Category, EmailVerificationToken
 from .serializers import (
     TaskSerializer, CategorySerializer,
     RegisterSerializer, ChangePasswordSerializer, UserProfileSerializer
@@ -14,9 +22,6 @@ from .serializers import (
 
 
 # ── PAGINATION ────────────────────────────────────────────────
-# Returns 10 tasks per page by default.
-# Usage: GET /api/tasks/?page=2
-# Change page_size or pass ?page_size=20 (up to max 100)
 
 class TaskPagination(PageNumberPagination):
     page_size = 10
@@ -27,20 +32,30 @@ class TaskPagination(PageNumberPagination):
 # ── AUTH ──────────────────────────────────────────────────────
 
 class RegisterView(generics.CreateAPIView):
-    """
-    POST /api/register/
-    Body: { username, email, password }
-    """
+    """POST /api/register/  Body: { username, email, password }"""
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
 
 
+class LogoutView(APIView):
+    """
+    POST /api/logout/
+    Body: { refresh }
+    Blacklists the refresh token. No auth required — token validates itself.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            token = RefreshToken(request.data.get('refresh', ''))
+            token.blacklist()
+            return Response({'detail': 'Logged out successfully.'})
+        except TokenError:
+            return Response({'detail': 'Invalid token.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class ChangePasswordView(APIView):
-    """
-    POST /api/change-password/
-    Body: { old_password, new_password }
-    Requires: Bearer token
-    """
+    """POST /api/change-password/  Body: { old_password, new_password }"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -51,13 +66,54 @@ class ChangePasswordView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+# ── EMAIL VERIFICATION ────────────────────────────────────────
+
+class VerifyEmailView(APIView):
+    """POST /api/verify-email/  Body: { token }"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        token_str = request.data.get('token', '')
+        try:
+            vt = EmailVerificationToken.objects.select_related('user__profile').get(token=token_str)
+            vt.user.profile.email_verified = True
+            vt.user.profile.save()
+            vt.delete()
+            return Response({'detail': 'Email verified successfully.'})
+        except (EmailVerificationToken.DoesNotExist, ValueError):
+            return Response({'detail': 'Invalid or expired token.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ResendVerificationView(APIView):
+    """POST /api/resend-verification/  Sends a new verification email."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if not user.email:
+            return Response({'detail': 'No email address on file.'}, status=status.HTTP_400_BAD_REQUEST)
+        if user.profile.email_verified:
+            return Response({'detail': 'Email already verified.'})
+
+        vt, _ = EmailVerificationToken.objects.get_or_create(user=user)
+        vt.token = uuid.uuid4()
+        vt.save()
+
+        verify_url = f"{settings.FRONTEND_URL}/?verify={vt.token}"
+        send_mail(
+            'Verify your Taskflow email',
+            f'Hi {user.username},\n\nPlease verify your email:\n{verify_url}\n\nThe Taskflow team',
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=True,
+        )
+        return Response({'detail': 'Verification email sent.'})
+
+
 # ── PROFILE ───────────────────────────────────────────────────
 
 class ProfileView(APIView):
-    """
-    GET  /api/profile/          → retrieve own profile
-    PATCH /api/profile/         → update bio or avatar
-    """
+    """GET/PATCH /api/profile/"""
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
@@ -85,20 +141,9 @@ class ProfileView(APIView):
 
 class TaskViewSet(viewsets.ModelViewSet):
     """
-    GET    /api/tasks/              → list (paginated)
-    POST   /api/tasks/              → create
-    GET    /api/tasks/{id}/         → retrieve
-    PUT    /api/tasks/{id}/         → full update
-    PATCH  /api/tasks/{id}/         → partial update
-    DELETE /api/tasks/{id}/         → delete
-
-    Query params:
-      ?search=keyword               → search by name
-      ?priority=high|medium|low     → filter by priority
-      ?done=true|false              → filter by completion
-      ?category=1                   → filter by category id
-      ?ordering=due|-created_at     → sort
-      ?page=2&page_size=20          → pagination
+    Standard CRUD at /api/tasks/.
+    Query params: ?search=  ?priority=  ?done=  ?category=  ?ordering=  ?page=  ?archived=true
+    Extra actions: POST /api/tasks/{id}/archive/  and  POST /api/tasks/{id}/restore/
     """
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated]
@@ -111,25 +156,36 @@ class TaskViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def get_queryset(self):
-        return Task.objects.filter(user=self.request.user)
+        qs = Task.objects.filter(user=self.request.user)
+        # List: respect ?archived=true; all other actions (detail, update, destroy, custom) see all
+        if self.action == 'list':
+            if self.request.query_params.get('archived') == 'true':
+                return qs.filter(archived=True)
+            return qs.filter(archived=False)
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def archive(self, request, pk=None):
+        task = get_object_or_404(Task, pk=pk, user=request.user, archived=False)
+        task.archived = True
+        task.save()
+        return Response({'detail': 'Task archived.'})
+
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        task = get_object_or_404(Task, pk=pk, user=request.user, archived=True)
+        task.archived = False
+        task.save()
+        return Response({'detail': 'Task restored.'})
 
 
 # ── CATEGORIES ────────────────────────────────────────────────
 
 class CategoryViewSet(viewsets.ModelViewSet):
-    """
-    GET    /api/categories/         → list all categories
-    POST   /api/categories/         → create
-    GET    /api/categories/{id}/    → retrieve
-    PUT    /api/categories/{id}/    → update
-    DELETE /api/categories/{id}/    → delete
-
-    Query params:
-      ?search=keyword               → search by name
-    """
+    """Standard CRUD at /api/categories/. Query params: ?search="""
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
 

@@ -14,9 +14,11 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+import os
+from django.conf import settings
 from django.contrib import admin
+from django.http import HttpResponse, JsonResponse
 from django.urls import path, include
-from django.http import JsonResponse
 from django.views.generic import TemplateView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -25,9 +27,19 @@ def health_check(request):
     return JsonResponse({'status': 'ok'})
 
 
+def service_worker(request):
+    sw_path = os.path.join(settings.BASE_DIR, 'frontend', 'static', 'js', 'sw.js')
+    with open(sw_path, 'r') as f:
+        content = f.read()
+    return HttpResponse(content, content_type='application/javascript')
+
+
 urlpatterns = [
     # Health check for Railway / load balancers
     path('health/', health_check, name='health-check'),
+
+    # Service worker (must be at root scope)
+    path('sw.js', service_worker, name='service-worker'),
 
     # Admin
     path('admin/', admin.site.urls),

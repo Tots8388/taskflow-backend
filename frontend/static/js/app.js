@@ -1,5 +1,4 @@
 // ── CONFIG ─────────────────────────────────────────────────
-// Use relative URL when served from Django (same origin), or override via env
 const API = window.__API_BASE__ || '/api';
 
 // ── STATE ──────────────────────────────────────────────────
@@ -77,9 +76,7 @@ async function api(method, path, body = null, isFormData = false) {
 
   let res = await doFetch(accessToken);
 
-  // If 401, try refreshing the token once
   if (res.status === 401 && refreshToken) {
-    // Prevent multiple simultaneous refresh attempts
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         refreshQueue.push({ resolve, reject });
@@ -91,13 +88,11 @@ async function api(method, path, body = null, isFormData = false) {
     isRefreshing = true;
     try {
       const newToken = await refreshAccessToken();
-      // Retry the original request
       res = await doFetch(newToken);
-      // Resolve any queued requests
       refreshQueue.forEach(q => q.resolve(newToken));
     } catch (e) {
       refreshQueue.forEach(q => q.reject(e));
-      logout();
+      _logoutUI();
       throw new Error('Session expired. Please sign in again.');
     } finally {
       isRefreshing = false;
@@ -151,7 +146,6 @@ async function authSubmit() {
       toast('Account created! Signing you in...', 'ok');
     }
 
-    // Get both access and refresh tokens
     const res = await fetch(API + '/token/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -177,13 +171,31 @@ async function authSubmit() {
   }
 }
 
-function logout() {
+// ── LOGOUT ─────────────────────────────────────────────────
+function _logoutUI() {
   clearTokens();
   tasks = []; categories = []; allTasks = [];
   document.getElementById('app').classList.remove('visible');
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('auth-username').value = '';
   document.getElementById('auth-password').value = '';
+  document.getElementById('verify-banner').classList.add('hidden');
+}
+
+async function logout() {
+  if (refreshToken) {
+    try {
+      await fetch(API + '/logout/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { 'Authorization': 'Bearer ' + accessToken } : {}),
+        },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
+    } catch (_) {}
+  }
+  _logoutUI();
 }
 
 // ── BOOT ───────────────────────────────────────────────────
@@ -196,13 +208,59 @@ async function bootApp(username) {
   fetchProfile();
 }
 
-// Check for existing token on load
+// ── EMAIL VERIFICATION ─────────────────────────────────────
+async function verifyEmail(token) {
+  history.replaceState({}, '', window.location.pathname);
+  try {
+    const res = await fetch(API + '/verify-email/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (res.ok) {
+      toast('Email verified! ✓', 'ok');
+      if (accessToken) fetchProfile();
+    } else {
+      toast('Verification link invalid or expired.', 'err');
+    }
+  } catch (_) {}
+}
+
+async function resendVerification() {
+  const btn = document.getElementById('resend-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  try {
+    await api('POST', '/resend-verification/');
+    toast('Verification email sent ✓', 'ok');
+  } catch (e) {
+    toast(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Resend email';
+  }
+}
+
+function updateVerifyBanner(emailVerified, email) {
+  const banner = document.getElementById('verify-banner');
+  if (email && !emailVerified) {
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+// ── ON LOAD ────────────────────────────────────────────────
+const _urlParams = new URLSearchParams(window.location.search);
+const _verifyToken = _urlParams.get('verify');
+if (_verifyToken) {
+  verifyEmail(_verifyToken);
+}
+
 if (accessToken) {
   api('GET', '/profile/')
     .then(data => bootApp(data.username))
-    .catch(() => {
-      clearTokens();
-    });
+    .catch(() => clearTokens());
 }
 
 // ── FETCH ALL TASKS (for dashboard counts) ─────────────────
@@ -220,14 +278,19 @@ async function fetchTasks() {
   sync('syncing');
   const ordering = document.getElementById('sort-select').value;
 
-  let params = `?page=${currentPage}&ordering=${ordering}`;
-  if (currentFilter === 'pending') params += '&done=false';
-  else if (currentFilter === 'done') params += '&done=true';
-  else if (currentFilter === 'high') params += '&priority=high';
-  else if (currentFilter === 'medium') params += '&priority=medium';
-  else if (currentFilter === 'low') params += '&priority=low';
-  else if (currentFilter === 'overdue') params += '&done=false';
-  else if (!['all'].includes(currentFilter)) params += `&category=${currentFilter}`;
+  let params;
+  if (currentFilter === 'archived') {
+    params = `?archived=true&page=${currentPage}`;
+  } else {
+    params = `?page=${currentPage}&ordering=${ordering}`;
+    if (currentFilter === 'pending') params += '&done=false';
+    else if (currentFilter === 'done') params += '&done=true';
+    else if (currentFilter === 'high') params += '&priority=high';
+    else if (currentFilter === 'medium') params += '&priority=medium';
+    else if (currentFilter === 'low') params += '&priority=low';
+    else if (currentFilter === 'overdue') params += '&done=false';
+    else if (!['all'].includes(currentFilter)) params += `&category=${currentFilter}`;
+  }
 
   try {
     const data = await api('GET', `/tasks/${params}`);
@@ -307,11 +370,31 @@ async function toggleDone(id) {
   }
 }
 
-// ── DELETE TASK ────────────────────────────────────────────
-async function deleteTask(id) {
+// ── ARCHIVE / RESTORE / DELETE ─────────────────────────────
+async function archiveTask(id) {
+  try {
+    await api('POST', `/tasks/${id}/archive/`);
+    toast('Task archived');
+    fetchTasks();
+  } catch (e) {
+    toast('Archive failed', 'err');
+  }
+}
+
+async function restoreTask(id) {
+  try {
+    await api('POST', `/tasks/${id}/restore/`);
+    toast('Task restored ✓', 'ok');
+    fetchTasks();
+  } catch (e) {
+    toast('Restore failed', 'err');
+  }
+}
+
+async function hardDeleteTask(id) {
   try {
     await api('DELETE', `/tasks/${id}/`);
-    toast('Deleted');
+    toast('Permanently deleted');
     fetchTasks();
   } catch (e) {
     toast('Delete failed', 'err');
@@ -437,6 +520,8 @@ async function fetchProfile() {
       placeholder.style.display = 'flex';
       placeholder.textContent = (data.username || '?')[0].toUpperCase();
     }
+
+    updateVerifyBanner(data.email_verified, data.email);
   } catch (e) {
     // token may have expired — handled by api() auto-refresh
   }
@@ -511,7 +596,11 @@ function dueLabel(due) {
 
 // ── RENDER TASKS ───────────────────────────────────────────
 function renderTasks() {
-  const titles = { all: 'All Tasks', pending: 'Pending', done: 'Completed', overdue: 'Overdue', high: 'High Priority', medium: 'Medium Priority', low: 'Low Priority' };
+  const titles = {
+    all: 'All Tasks', pending: 'Pending', done: 'Completed',
+    overdue: 'Overdue', high: 'High Priority', medium: 'Medium Priority',
+    low: 'Low Priority', archived: 'Archived'
+  };
   const cat = categories.find(c => c.id === parseInt(currentFilter));
   document.getElementById('view-title').textContent = cat ? cat.name : (titles[currentFilter] || 'Tasks');
 
@@ -521,22 +610,28 @@ function renderTasks() {
     return;
   }
 
+  const isArchivedView = currentFilter === 'archived';
+
   list.innerHTML = tasks.map(t => {
-    const cat = categories.find(c => c.id === t.category);
+    const taskCat = categories.find(c => c.id === t.category);
     const dl = dueLabel(t.due);
+    const actions = isArchivedView
+      ? `<button class="act-btn restore" onclick="restoreTask(${t.id})" title="Restore">↩</button>
+         <button class="act-btn del" onclick="hardDeleteTask(${t.id})" title="Delete forever">✕</button>`
+      : `<button class="act-btn edit" onclick="openEditModal(${t.id})" title="Edit">✎</button>
+         <button class="act-btn archive" onclick="archiveTask(${t.id})" title="Archive">⊘</button>`;
     return `<div class="task-card ${t.done ? 'done' : ''}" data-priority="${t.priority}">
       <div class="task-check ${t.done ? 'checked' : ''}" onclick="toggleDone(${t.id})">${t.done ? '✓' : ''}</div>
       <div class="task-info">
         <div class="task-name">${esc(t.name)}</div>
         <div class="task-meta">
           <span class="tag p-tag">${t.priority}</span>
-          ${cat ? `<span class="tag c-tag" style="background:${cat.color}22;color:${cat.color}">${esc(cat.name)}</span>` : ''}
+          ${taskCat ? `<span class="tag c-tag" style="background:${taskCat.color}22;color:${taskCat.color}">${esc(taskCat.name)}</span>` : ''}
           ${dl ? `<span class="due-tag ${dl.cls}">◷ ${dl.text}</span>` : ''}
         </div>
       </div>
       <div class="task-actions">
-        <button class="act-btn edit" onclick="openEditModal(${t.id})" title="Edit">✎</button>
-        <button class="act-btn del" onclick="deleteTask(${t.id})" title="Delete">✕</button>
+        ${actions}
       </div>
     </div>`;
   }).join('');
@@ -699,6 +794,45 @@ function showView(name, btn) {
   if (name === 'profile') fetchProfile();
 }
 
+// ── KEYBOARD SHORTCUTS ─────────────────────────────────────
+function toggleShortcuts() {
+  document.getElementById('shortcuts-overlay').classList.toggle('hidden');
+}
+
+function hideShortcuts() {
+  document.getElementById('shortcuts-overlay').classList.add('hidden');
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!document.getElementById('app').classList.contains('visible')) return;
+
+  switch (e.key) {
+    case 'n': {
+      if (document.getElementById('view-tasks').classList.contains('active')) {
+        document.getElementById('task-input').focus();
+        e.preventDefault();
+      }
+      break;
+    }
+    case '1': document.querySelectorAll('.nav-btn')[0]?.click(); break;
+    case '2': document.querySelectorAll('.nav-btn')[1]?.click(); break;
+    case '3': document.querySelectorAll('.nav-btn')[2]?.click(); break;
+    case '4': document.querySelectorAll('.nav-btn')[3]?.click(); break;
+    case 'Escape':
+      closeEditModal();
+      closeCatModal();
+      hideShortcuts();
+      break;
+    case '?':
+      toggleShortcuts();
+      e.preventDefault();
+      break;
+  }
+});
+
 // close modals on overlay click
 document.getElementById('edit-modal').addEventListener('click', function(e) { if (e.target === this) closeEditModal(); });
 document.getElementById('cat-modal').addEventListener('click', function(e) { if (e.target === this) closeCatModal(); });
+document.getElementById('shortcuts-overlay').addEventListener('click', function(e) { if (e.target === this) hideShortcuts(); });

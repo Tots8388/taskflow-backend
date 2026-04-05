@@ -1,7 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import Task, Category, UserProfile
+from django.core.mail import send_mail
+from django.conf import settings
+from .models import Task, Category, UserProfile, EmailVerificationToken
 
 
 # ── AUTH ──────────────────────────────────────────────────────
@@ -14,10 +16,24 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ['username', 'email', 'password']
 
     def create(self, validated_data):
-        return User.objects.create_user(
+        user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data.get('email', ''),
             password=validated_data['password'],
+        )
+        if user.email:
+            self._send_verification(user)
+        return user
+
+    def _send_verification(self, user):
+        vt = EmailVerificationToken.objects.create(user=user)
+        verify_url = f"{settings.FRONTEND_URL}/?verify={vt.token}"
+        send_mail(
+            'Verify your Taskflow email',
+            f'Hi {user.username},\n\nPlease verify your email:\n{verify_url}\n\nThe Taskflow team',
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=True,
         )
 
 
@@ -47,8 +63,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ['username', 'email', 'bio', 'avatar', 'avatar_url', 'created_at']
-        read_only_fields = ['created_at']
+        fields = ['username', 'email', 'bio', 'avatar', 'avatar_url', 'email_verified', 'created_at']
+        read_only_fields = ['created_at', 'email_verified']
         extra_kwargs = {
             'avatar': {'write_only': True},
         }
@@ -72,5 +88,5 @@ class CategorySerializer(serializers.ModelSerializer):
 class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
-        fields = ['id', 'name', 'priority', 'due', 'done', 'category', 'created_at']
-        read_only_fields = ['id', 'created_at']
+        fields = ['id', 'name', 'priority', 'due', 'done', 'category', 'archived', 'created_at']
+        read_only_fields = ['id', 'created_at', 'archived']
