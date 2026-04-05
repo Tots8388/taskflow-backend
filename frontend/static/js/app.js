@@ -650,13 +650,13 @@ function renderDashboard() {
           allTasks.filter(t => t.priority === 'medium').length,
           allTasks.filter(t => t.priority === 'low').length
         ],
-        backgroundColor: ['#ff5a5a', '#ffaa44', '#4cde90'],
+        backgroundColor: ['#e74c6f', '#f5a623', '#2ecc87'],
         borderWidth: 0, hoverOffset: 6
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: '#5e5e78', font: { family: 'DM Mono', size: 11 }, boxWidth: 12 } } }
+      plugins: { legend: { labels: { color: '#8e92ab', font: { family: 'DM Sans', size: 11 }, boxWidth: 12 } } }
     }
   });
 
@@ -681,8 +681,8 @@ function renderDashboard() {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: '#5e5e78', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#2a2a38' } },
-        y: { ticks: { color: '#5e5e78', font: { family: 'DM Mono', size: 10 }, stepSize: 1 }, grid: { color: '#2a2a38' } }
+        x: { ticks: { color: '#8e92ab', font: { family: 'DM Sans', size: 10 } }, grid: { color: '#e2e4ef' } },
+        y: { ticks: { color: '#8e92ab', font: { family: 'DM Sans', size: 10 }, stepSize: 1 }, grid: { color: '#e2e4ef' } }
       }
     }
   });

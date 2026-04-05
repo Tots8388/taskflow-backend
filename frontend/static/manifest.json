@@ -4,8 +4,8 @@
   "description": "Your tasks. Your way.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0c",
-  "theme_color": "#0a0a0c",
+  "background_color": "#f0f2f8",
+  "theme_color": "#6c5ce7",
   "icons": [
     {
       "src": "/static/img/favicon.svg",
